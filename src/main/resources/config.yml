@@ -1,0 +1,96 @@
+# ==================================================
+# CostumePlugin - Konfiguracja glowna
+# ==================================================
+
+# Ogolne ustawienia
+settings:
+  # Jezyk (aktualnie dostepny: pl)
+  language: pl
+  # Czy zapisywac dane co X minut automatycznie
+  auto-save-interval-minutes: 5
+  # Czy logowac debugowe informacje
+  debug: false
+
+# Cooldowny (w sekundach)
+cooldowns:
+  prezydent-marking: 25
+  mim-infection: 30
+  walentynkowy-heal: 60
+  maly-urwis-jumpscare: 45
+  pirat-anchor: 90
+  nurek-bubble: 30
+  wampir-lifesteal: 15
+  mikolaj-gift: 120
+  zabojczy-krolik-dash: 20
+
+# Efekty glowingu (w sekundach - dlugosc trwania)
+glowing:
+  prezydent-mark-duration: 10
+  mim-infection-duration: 8
+
+# Ustawienia serc
+hearts:
+  # Maksymalna liczba dodatkowych serc z kostiumu
+  max-extra-hearts: 10
+  # Ilosc serc dawana przez kostium wampira
+  wampir-extra-hearts: 4
+  # Ilosc serc dawana przez kostium mikolaja
+  mikolaj-extra-hearts: 2
+
+# Ustawienia papug
+parrots:
+  # Czy pozwolic na wielokrotne papugi na jednego gracza
+  allow-multiple: false
+  # Maksymalny czas expiry papugi (w dniach, 0 = wieczna)
+  default-expiry-days: 30
+  # Czy zloty papuga ma bonusy
+  golden-bonus-multiplier: 1.5
+  # Odleglosc trzymania papugi za graczem
+  follow-distance: 3.0
+
+# Zwierzeta - ustawienia glodu
+pet-hunger:
+  # Co ile sekund pet je (traci glod)
+  hunger-tick-seconds: 300
+  # Ilosc glodu utracona na tick
+  hunger-per-tick: 5
+  # Maksymalny glod peta
+  max-hunger: 100
+
+# Ustawienia GUI
+gui:
+  szafka-title: "&5Twoja Szafa Kostiumow"
+  lista-title: "&8Dostepne Kostiumy"
+  pety-title: "&3Twoje Zwierzaki"
+
+# WorldGuard integracja (opcjonalna)
+worldguard:
+  # Regiony w ktorych kostiumy sa wylaczone
+  disabled-regions:
+    - "spawn"
+    - "arena"
+
+# Uprawnienia domyslne (moga byc nadpisywane w LuckPerms)
+permissions:
+  # Czy nowy gracz dostaje kostium powitalny
+  give-starter-costume: false
+  starter-costume-id: "walentynkowy"
+
+# Nametag i BelowName
+nametag:
+  # Prefix formatujacy nick gracza w kostiumie
+  format-in-costume: "&8[&e{costume}&8] &f{name}"
+  # BelowName - tekst pod nickiem
+  below-name-text: "&7Kostium: &f{costume}"
+  # Kolor druzynowy dla kazdego kostiumu (jesli aktywny)
+  team-colors:
+    prezydent: "AQUA"
+    mim: "DARK_PURPLE"
+    wampir: "DARK_RED"
+    pirat: "GOLD"
+    nurek: "BLUE"
+    mikolaj: "RED"
+    zabojczy-krolik: "WHITE"
+    maly-urwis: "YELLOW"
+    walentynkowy: "LIGHT_PURPLE"
+    przeciwzakazeniowy: "GREEN"
