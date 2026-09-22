@@ -1,0 +1,309 @@
+# ==================================================
+# CostumePlugin - Konfiguracja kostiumow
+# ==================================================
+# Kazdy kostium ma:
+#   display-name: nazwa wyswietlana
+#   material: material itemu do prezentacji
+#   custom-model-data: opcjonalne CMD dla resource packa
+#   lore: opis w GUI
+#   armor: opcjonalne czesci pancerza (helmet/chestplate/leggings/boots) z CMD
+#   effects: efekty pasywne (potion effects)
+#   abilities: unikalne umiejetnosci (obsluga w kodzie)
+
+costumes:
+
+  prezydent:
+    display-name: "&eKostium Prezydenta"
+    material: GOLDEN_HELMET
+    custom-model-data: 1001
+    lore:
+      - "&7Oznaczasz przeciwnikow na &b10 sekund"
+      - "&7Cooldown: &f25s"
+    armor:
+      helmet:
+        material: GOLDEN_HELMET
+        custom-model-data: 1001
+      chestplate:
+        material: LEATHER_CHESTPLATE
+        color: "#1E3A8A"
+        custom-model-data: 1002
+      leggings:
+        material: LEATHER_LEGGINGS
+        color: "#1E3A8A"
+        custom-model-data: 1003
+      boots:
+        material: LEATHER_BOOTS
+        color: "#1E3A8A"
+        custom-model-data: 1004
+    effects: []
+    abilities:
+      - marking
+
+  mim:
+    display-name: "&5Kostium Mima"
+    material: PLAYER_HEAD
+    custom-model-data: 1010
+    lore:
+      - "&7Zakazasz przeciwnikow slownie"
+      - "&7Cooldown: &f30s"
+    armor:
+      helmet:
+        material: LEATHER_HELMET
+        color: "#FFFFFF"
+        custom-model-data: 1011
+      chestplate:
+        material: LEATHER_CHESTPLATE
+        color: "#111111"
+        custom-model-data: 1012
+      leggings:
+        material: LEATHER_LEGGINGS
+        color: "#FFFFFF"
+        custom-model-data: 1013
+      boots:
+        material: LEATHER_BOOTS
+        color: "#111111"
+        custom-model-data: 1014
+    effects: []
+    abilities:
+      - infection
+
+  walentynkowy:
+    display-name: "&dKostium Walentynkowy"
+    material: POPPY
+    custom-model-data: 1020
+    lore:
+      - "&7Uleczasz sasiadow"
+      - "&7Cooldown: &f60s"
+    armor:
+      helmet:
+        material: LEATHER_HELMET
+        color: "#FF69B4"
+        custom-model-data: 1021
+      chestplate:
+        material: LEATHER_CHESTPLATE
+        color: "#FF69B4"
+        custom-model-data: 1022
+      leggings:
+        material: LEATHER_LEGGINGS
+        color: "#FF69B4"
+        custom-model-data: 1023
+      boots:
+        material: LEATHER_BOOTS
+        color: "#FF69B4"
+        custom-model-data: 1024
+    effects:
+      - "REGENERATION:0:20"
+    abilities:
+      - heart-heal
+
+  przeciwzakazeniowy:
+    display-name: "&aKostium Przeciwzakazeniowy"
+    material: SHIELD
+    custom-model-data: 1030
+    lore:
+      - "&7Odpornosc na zakazenia Mima"
+      - "&7Bonus: &fresistance I"
+    armor:
+      helmet:
+        material: LEATHER_HELMET
+        color: "#22C55E"
+        custom-model-data: 1031
+      chestplate:
+        material: LEATHER_CHESTPLATE
+        color: "#22C55E"
+        custom-model-data: 1032
+      leggings:
+        material: LEATHER_LEGGINGS
+        color: "#22C55E"
+        custom-model-data: 1033
+      boots:
+        material: LEATHER_BOOTS
+        color: "#22C55E"
+        custom-model-data: 1034
+    effects:
+      - "RESISTANCE:0:40"
+    abilities:
+      - infection-immunity
+
+  maly-urwis:
+    display-name: "&6Kostium Malego Urwisa"
+    material: TNT
+    custom-model-data: 1040
+    lore:
+      - "&7Straszysz graczy"
+      - "&7Cooldown: &f45s"
+    armor:
+      helmet:
+        material: LEATHER_HELMET
+        color: "#F97316"
+        custom-model-data: 1041
+      chestplate:
+        material: LEATHER_CHESTPLATE
+        color: "#F97316"
+        custom-model-data: 1042
+      leggings:
+        material: LEATHER_LEGGINGS
+        color: "#1F2937"
+        custom-model-data: 1043
+      boots:
+        material: LEATHER_BOOTS
+        color: "#1F2937"
+        custom-model-data: 1044
+    effects: []
+    abilities:
+      - jumpscare
+      - double-jump
+
+  zabojczy-krolik:
+    display-name: "&fKostium Zabojczego Krolika"
+    material: RABBIT_FOOT
+    custom-model-data: 1050
+    lore:
+      - "&7Skoki i szybkosc"
+      - "&7Redukcja obrazen z upadku"
+    armor:
+      helmet:
+        material: LEATHER_HELMET
+        color: "#FFFFFF"
+        custom-model-data: 1051
+      chestplate:
+        material: LEATHER_CHESTPLATE
+        color: "#FFFFFF"
+        custom-model-data: 1052
+      leggings:
+        material: LEATHER_LEGGINGS
+        color: "#FFFFFF"
+        custom-model-data: 1053
+      boots:
+        material: LEATHER_BOOTS
+        color: "#FFFFFF"
+        custom-model-data: 1054
+    effects:
+      - "JUMP_BOOST:1:40"
+      - "SPEED:0:40"
+    abilities:
+      - dash
+
+  pirat:
+    display-name: "&6Kostium Pirata"
+    material: FISHING_ROD
+    custom-model-data: 1060
+    lore:
+      - "&7Odpornosc na topienie"
+      - "&7Kotwica: &f/kostium anchor"
+    armor:
+      helmet:
+        material: LEATHER_HELMET
+        color: "#78350F"
+        custom-model-data: 1061
+      chestplate:
+        material: LEATHER_CHESTPLATE
+        color: "#7C2D12"
+        custom-model-data: 1062
+      leggings:
+        material: LEATHER_LEGGINGS
+        color: "#1F2937"
+        custom-model-data: 1063
+      boots:
+        material: LEATHER_BOOTS
+        color: "#1F2937"
+        custom-model-data: 1064
+    effects: []
+    abilities:
+      - drowning-immunity
+      - anchor
+
+  nurek:
+    display-name: "&bKostium Nurka"
+    material: TURTLE_HELMET
+    custom-model-data: 1070
+    lore:
+      - "&7Water breathing i widzenie w nocy"
+      - "&7Banka powietrza dla sojusznika"
+    armor:
+      helmet:
+        material: TURTLE_HELMET
+        custom-model-data: 1071
+      chestplate:
+        material: LEATHER_CHESTPLATE
+        color: "#0EA5E9"
+        custom-model-data: 1072
+      leggings:
+        material: LEATHER_LEGGINGS
+        color: "#0EA5E9"
+        custom-model-data: 1073
+      boots:
+        material: LEATHER_BOOTS
+        color: "#0EA5E9"
+        custom-model-data: 1074
+    effects:
+      - "WATER_BREATHING:0:40"
+      - "NIGHT_VISION:0:220"
+    abilities:
+      - bubble-share
+
+  wampir:
+    display-name: "&4Kostium Wampira"
+    material: REDSTONE
+    custom-model-data: 1080
+    lore:
+      - "&7Lifesteal 15%"
+      - "&7Widzenie w nocy"
+      - "&7+4 serca"
+    armor:
+      helmet:
+        material: LEATHER_HELMET
+        color: "#7F1D1D"
+        custom-model-data: 1081
+      chestplate:
+        material: LEATHER_CHESTPLATE
+        color: "#7F1D1D"
+        custom-model-data: 1082
+      leggings:
+        material: LEATHER_LEGGINGS
+        color: "#1F2937"
+        custom-model-data: 1083
+      boots:
+        material: LEATHER_BOOTS
+        color: "#1F2937"
+        custom-model-data: 1084
+    effects:
+      - "SPEED:0:40"
+      - "NIGHT_VISION:0:220"
+    abilities:
+      - lifesteal
+      - extra-hearts
+
+  mikolaj:
+    display-name: "&cKostium Mikolaja"
+    material: RED_WOOL
+    custom-model-data: 1090
+    lore:
+      - "&7Odpornosc na ogien"
+      - "&7Rozdaje prezenty"
+      - "&7+2 serca"
+    armor:
+      helmet:
+        material: LEATHER_HELMET
+        color: "#DC2626"
+        custom-model-data: 1091
+      chestplate:
+        material: LEATHER_CHESTPLATE
+        color: "#DC2626"
+        custom-model-data: 1092
+      leggings:
+        material: LEATHER_LEGGINGS
+        color: "#DC2626"
+        custom-model-data: 1093
+      boots:
+        material: LEATHER_BOOTS
+        color: "#1F2937"
+        custom-model-data: 1094
+    effects:
+      - "FIRE_RESISTANCE:0:40"
+    abilities:
+      - gift
+      - extra-hearts
+
+# Kostium powitalny dla nowych graczy (jesli enabled w config.yml)
+starter-inventory-slot: 8
