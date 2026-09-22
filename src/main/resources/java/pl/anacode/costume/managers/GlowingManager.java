@@ -5,411 +5,269 @@ import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.scoreboard.Scoreboard;
-import org.bukkit.scoreboard.ScoreboardManager;
 import org.bukkit.scoreboard.Team;
 import pl.anacode.costume.CostumePlugin;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Manager kolorowego glowingu przez Scoreboard Teams.
- *
- * NAPRAWA:
- * - Wszystkie operacje na teamach owinięte w try/catch
- * - Sprawdzanie hasEntry() PRZED każdą modyfikacją
- * - Sprawdzanie isOnline() gracza przed każdą operacją
- * - Automatyczny cleanup przy quit/disconnect
- * - Ochrona przed Citizens NPC klonami (target ma być realnym graczem)
- * - Task cleanup uruchamiany zawsze w try/catch
- * - Bezpieczne czyszczenie po zakończeniu efektu nawet gdy gracz offline
- */
 public class GlowingManager {
 
     private final CostumePlugin plugin;
     private static final String TEAM_PREFIX = "cpl_";
 
-    // Aktywne glowing: playerUUID -> kolor
-    private final Map<UUID, ChatColor> activeGlowing = new HashMap<>();
-
-    // Taski cofające glowing po czasie
-    private final Map<UUID, BukkitTask> glowTasks = new HashMap<>();
-
-    // Nazwy graczy w teamach (do bezpiecznego usuwania nawet gdy offline)
-    private final Map<UUID, String> playerNames = new HashMap<>();
+    // UUID -> ID zadania wygaszającego
+    private final Map<UUID, BukkitTask> glowingTasks = new ConcurrentHashMap<>();
+    // UUID -> Nazwa gracza (zapisana jako String na wypadek gdyby gracz zniknął/wyszedł/był ukryty)
+    private final Map<UUID, String> playerNames = new ConcurrentHashMap<>();
+    // UUID -> ChatColor aktualnego glowingu
+    private final Map<UUID, ChatColor> activeColors = new ConcurrentHashMap<>();
 
     public GlowingManager(CostumePlugin plugin) {
         this.plugin = plugin;
     }
 
     /**
-     * Ustawia glowing na graczu.
-     * BEZPIECZNIE — sprawdza wszystkie warunki.
+     * Nadaje graczowi efekt Glowingu z określonym kolorem na dany czas (w sekundach).
+     * W pełni bezpieczne w przypadku klonów Citizens, ukrywania gracza oraz nagłych rozłączeń.
      */
     public void setGlowing(Player player, ChatColor color, int durationSeconds) {
-        if (player == null || !player.isOnline()) return;
-        if (color == null) return;
+        if (player == null) return;
 
         UUID uuid = player.getUniqueId();
         String playerName = player.getName();
 
-        // Anuluj poprzedni task jeśli był
-        cancelTask(uuid);
-
-        // Wyczyść poprzedni glowing (jeśli był)
-        safeRemoveFromAllOurTeams(playerName);
-
-        // Dodaj do nowego teamu
-        boolean added = safeAddToTeam(playerName, color);
-        if (!added) {
-            plugin.getLogger().warning("[Glowing] Nie udało się dodać "
-                    + playerName + " do teamu koloru " + color);
-            return;
-        }
-
-        activeGlowing.put(uuid, color);
+        // 1. Zapisujemy nazwę gracza i kolor w pamięci
         playerNames.put(uuid, playerName);
+        activeColors.put(uuid, color);
 
-        // Dodaj efekt glowing
-        try {
-            int ticks = durationSeconds > 0 ? durationSeconds * 20 : Integer.MAX_VALUE;
-            player.addPotionEffect(new PotionEffect(
-                    PotionEffectType.GLOWING, ticks, 0, false, false, true));
-        } catch (Exception e) {
-            plugin.getLogger().warning("[Glowing] Błąd dodawania efektu: "
-                    + e.getMessage());
+        // 2. Anulujemy poprzedni task wygaszający jeśli istniał
+        BukkitTask previousTask = glowingTasks.remove(uuid);
+        if (previousTask != null) {
+            try {
+                previousTask.cancel();
+            } catch (Throwable ignored) {}
         }
 
-        // Zaplanuj cleanup
-        if (durationSeconds > 0 && plugin.isEnabled()) {
+        // 3. Wykonujemy operację na głównym wątku serwera
+        runSync(() -> {
             try {
-                BukkitTask task = new BukkitRunnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            removeGlowingByUuid(uuid);
-                        } catch (Exception e) {
-                            plugin.getLogger().warning(
-                                    "[Glowing] Błąd cleanup task: " + e.getMessage());
-                        }
-                    }
-                }.runTaskLater(plugin, durationSeconds * 20L);
-                glowTasks.put(uuid, task);
-            } catch (Exception e) {
-                plugin.getLogger().warning(
-                        "[Glowing] Nie udało się zaplanować task: " + e.getMessage());
+                Scoreboard sb = getScoreboard();
+                if (sb == null) return;
+
+                // Bezpiecznie usuwamy gracza ze starych drużyn tego pluginu
+                safeRemoveFromAllOurTeams(sb, playerName);
+
+                // Pobieramy lub tworzymy team dla danego koloru
+                String teamName = getTeamNameForColor(color);
+                Team team = sb.getTeam(teamName);
+                if (team == null) {
+                    team = sb.registerNewTeam(teamName);
+                }
+                team.setColor(color);
+                team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.ALWAYS);
+
+                if (!team.hasEntry(playerName)) {
+                    team.addEntry(playerName);
+                }
+
+                // Dodajemy efekt potki tylko jeśli gracz jest w pełni online i zespawnowany
+                if (player.isOnline() && player.isValid()) {
+                    player.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, durationSeconds * 20, 0, false, false, true));
+                }
+            } catch (Throwable t) {
+                plugin.getLogger().warning("Niegrozny blad podczas nadawania glowingu: " + t.getMessage());
             }
+        });
+
+        // 4. Planujemy automatyczne i bezpieczne usunięcie efektu po czasie
+        if (durationSeconds > 0 && plugin.isEnabled()) {
+            BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                // Usuwamy efekt niezależnie od tego, czy gracz jest online, ukryty przez Citizens czy na innym świecie
+                removeGlowingInternal(uuid, playerName);
+            }, durationSeconds * 20L);
+
+            glowingTasks.put(uuid, task);
         }
     }
 
     /**
-     * Usuwa glowing z gracza online.
+     * Bezpiecznie zdejmuje glowing z gracza.
      */
     public void removeGlowing(Player player) {
         if (player == null) return;
-        removeGlowingByUuid(player.getUniqueId());
+        removeGlowingInternal(player.getUniqueId(), player.getName());
     }
 
     /**
-     * Usuwa glowing po UUID (bezpieczne nawet gdy gracz offline).
+     * Zdejmuje glowing po samym UUID (np. gdy gracz jest offline lub sklonowany).
      */
     public void removeGlowingByUuid(UUID uuid) {
         if (uuid == null) return;
-
-        cancelTask(uuid);
-        activeGlowing.remove(uuid);
-
-        // Pobierz zapamiętaną nazwę
-        String playerName = playerNames.remove(uuid);
-
-        // Jeśli gracz jest online, użyj jego aktualnej nazwy
-        Player player = Bukkit.getPlayer(uuid);
-        if (player != null) {
-            playerName = player.getName();
-
-            // Usuń efekt glowing
-            try {
-                if (player.isOnline()) {
-                    player.removePotionEffect(PotionEffectType.GLOWING);
-                }
-            } catch (Exception e) {
-                plugin.getLogger().warning(
-                        "[Glowing] Błąd usuwania efektu: " + e.getMessage());
-            }
-        }
-
-        // Usuń z teamu — nawet gdy gracz offline (używamy zapamiętanej nazwy)
-        if (playerName != null) {
-            safeRemoveFromAllOurTeams(playerName);
-        }
+        String name = playerNames.get(uuid);
+        removeGlowingInternal(uuid, name);
     }
 
     /**
-     * Sprawdza czy gracz ma aktywny glowing z tego pluginu.
+     * Wewnętrzna metoda czyszcząca – całkowicie odporna na nulle, brak entity i błędy Netty.
      */
-    public boolean isGlowing(Player player) {
-        if (player == null) return false;
-        return activeGlowing.containsKey(player.getUniqueId());
-    }
-
-    /**
-     * Wywoływane gdy gracz się wylogowuje.
-     * KLUCZOWE: usuwamy z teamu żeby kolor nie został po powrocie
-     * i żeby nie było problemów z packetami.
-     */
-    public void cleanupPlayer(Player player) {
-        if (player == null) return;
-
-        UUID uuid = player.getUniqueId();
-        String playerName = player.getName();
-
-        cancelTask(uuid);
-
-        // Usuń z teamu zanim gracz się rozłączy
-        safeRemoveFromAllOurTeams(playerName);
-
-        activeGlowing.remove(uuid);
-        playerNames.remove(uuid);
-    }
-
-    /**
-     * Wywoływane przy shutdown pluginu.
-     */
-    public void cleanupAll() {
-        // Anuluj wszystkie taski
-        for (BukkitTask task : glowTasks.values()) {
-            try {
-                if (task != null) task.cancel();
-            } catch (Exception ignored) {
-            }
-        }
-        glowTasks.clear();
-
-        // Usuń glowing z wszystkich graczy
-        for (Map.Entry<UUID, String> entry : new HashMap<>(playerNames).entrySet()) {
-            String playerName = entry.getValue();
-            Player player = Bukkit.getPlayer(entry.getKey());
-
-            try {
-                if (player != null && player.isOnline()) {
-                    player.removePotionEffect(PotionEffectType.GLOWING);
-                }
-            } catch (Exception ignored) {
-            }
-
-            if (playerName != null) {
-                safeRemoveFromAllOurTeams(playerName);
-            }
-        }
-
-        activeGlowing.clear();
-        playerNames.clear();
-
-        // Bezpiecznie unregister wszystkich naszych teamów
-        safeUnregisterAllOurTeams();
-    }
-
-    /**
-     * Synchronizuje glowing dla nowego gracza — używane w JoinListener.
-     * Nie robimy nic specjalnego, bo gracz i tak zobaczy istniejące teamy
-     * po scoreboard sync z serwera.
-     */
-    public void syncToNewPlayer(Player player) {
-        // Placeholder — Minecraft sam sync-uje teamy scoreboardu
-        // gdy gracz się loguje. Nic tu nie trzeba robić.
-        if (player == null || !player.isOnline()) return;
-
-        // Jeśli gracz miał aktywny glowing (np. rejoin) — przywróć
-        UUID uuid = player.getUniqueId();
-        ChatColor color = activeGlowing.get(uuid);
-        if (color != null) {
-            try {
-                safeAddToTeam(player.getName(), color);
-                playerNames.put(uuid, player.getName());
-            } catch (Exception ignored) {
-            }
-        }
-    }
-
-    // ========================================
-    // PRYWATNE METODY POMOCNICZE
-    // ========================================
-
-    /**
-     * BEZPIECZNIE dodaje gracza do teamu koloru.
-     * Sprawdza wszystkie warunki, łapie wyjątki.
-     */
-    private boolean safeAddToTeam(String playerName, ChatColor color) {
-        if (playerName == null || color == null) return false;
-
-        try {
-            ScoreboardManager sm = Bukkit.getScoreboardManager();
-            if (sm == null) return false;
-
-            Scoreboard sb = sm.getMainScoreboard();
-            String teamName = TEAM_PREFIX + color.name().toLowerCase();
-
-            // Nazwa teamu musi być <= 16 znaków (Minecraft limit)
-            if (teamName.length() > 16) {
-                teamName = teamName.substring(0, 16);
-            }
-
-            Team team = sb.getTeam(teamName);
-            if (team == null) {
-                try {
-                    team = sb.registerNewTeam(teamName);
-                    team.setColor(color);
-                } catch (Exception e) {
-                    plugin.getLogger().warning(
-                            "[Glowing] Nie udało się utworzyć teamu " + teamName
-                                    + ": " + e.getMessage());
-                    return false;
-                }
-            }
-
-            // Sprawdź czy gracz już nie jest w tym teamie
-            try {
-                if (team.hasEntry(playerName)) {
-                    return true; // już jest, nic nie rób
-                }
-            } catch (Exception ignored) {
-            }
-
-            // Dodaj do teamu
-            try {
-                team.addEntry(playerName);
-                return true;
-            } catch (IllegalStateException | IllegalArgumentException e) {
-                plugin.getLogger().warning(
-                        "[Glowing] Nie udało się dodać " + playerName
-                                + " do teamu " + teamName + ": " + e.getMessage());
-                return false;
-            }
-
-        } catch (Exception e) {
-            plugin.getLogger().warning(
-                    "[Glowing] Krytyczny błąd w safeAddToTeam: " + e.getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * BEZPIECZNIE usuwa gracza ze WSZYSTKICH naszych teamów.
-     * KLUCZOWA metoda — sprawdza hasEntry() przed removeEntry()
-     * i łapie każdy możliwy wyjątek.
-     */
-    private void safeRemoveFromAllOurTeams(String playerName) {
-        if (playerName == null || playerName.isEmpty()) return;
-
-        try {
-            ScoreboardManager sm = Bukkit.getScoreboardManager();
-            if (sm == null) return;
-
-            Scoreboard sb = sm.getMainScoreboard();
-
-            // Iteruj po kopii żeby uniknąć ConcurrentModification
-            Set<Team> teams;
-            try {
-                teams = new HashSet<>(sb.getTeams());
-            } catch (Exception e) {
-                plugin.getLogger().warning(
-                        "[Glowing] Nie mogę pobrać listy teamów: " + e.getMessage());
-                return;
-            }
-
-            for (Team team : teams) {
-                if (team == null) continue;
-
-                String teamName;
-                try {
-                    teamName = team.getName();
-                } catch (Exception ignored) {
-                    continue;
-                }
-
-                if (teamName == null || !teamName.startsWith(TEAM_PREFIX)) continue;
-
-                // KLUCZOWE: sprawdź hasEntry PRZED removeEntry
-                try {
-                    if (team.hasEntry(playerName)) {
-                        team.removeEntry(playerName);
-                    }
-                } catch (IllegalStateException e) {
-                    // Team został unregister-owany w międzyczasie — ignoruj
-                } catch (IllegalArgumentException e) {
-                    // Entry nie istnieje — ignoruj
-                } catch (Exception e) {
-                    plugin.getLogger().warning(
-                            "[Glowing] Błąd usuwania z teamu " + teamName
-                                    + ": " + e.getMessage());
-                }
-            }
-        } catch (Exception e) {
-            plugin.getLogger().warning(
-                    "[Glowing] Krytyczny błąd w safeRemoveFromAllOurTeams: "
-                            + e.getMessage());
-        }
-    }
-
-    /**
-     * Unregister wszystkich naszych teamów.
-     * Wywoływane tylko przy pełnym cleanup pluginu.
-     */
-    private void safeUnregisterAllOurTeams() {
-        try {
-            ScoreboardManager sm = Bukkit.getScoreboardManager();
-            if (sm == null) return;
-
-            Scoreboard sb = sm.getMainScoreboard();
-
-            Set<Team> teams;
-            try {
-                teams = new HashSet<>(sb.getTeams());
-            } catch (Exception e) {
-                return;
-            }
-
-            for (Team team : teams) {
-                if (team == null) continue;
-
-                String teamName;
-                try {
-                    teamName = team.getName();
-                } catch (Exception ignored) {
-                    continue;
-                }
-
-                if (teamName == null || !teamName.startsWith(TEAM_PREFIX)) continue;
-
-                try {
-                    team.unregister();
-                } catch (Exception ignored) {
-                }
-            }
-        } catch (Exception ignored) {
-        }
-    }
-
-    private void cancelTask(UUID uuid) {
-        BukkitTask task = glowTasks.remove(uuid);
+    private void removeGlowingInternal(UUID uuid, String playerName) {
+        // Anulujemy task
+        BukkitTask task = glowingTasks.remove(uuid);
         if (task != null) {
             try {
                 task.cancel();
-            } catch (Exception ignored) {
-            }
+            } catch (Throwable ignored) {}
         }
+
+        activeColors.remove(uuid);
+        if (playerName == null) {
+            playerName = playerNames.get(uuid);
+        }
+        playerNames.remove(uuid);
+
+        final String finalName = playerName;
+
+        runSync(() -> {
+            try {
+                // 1. Czyszczenie ze scoreboardu po nazwie String (działa nawet jak gracz jest despawnowany przez Citizens)
+                Scoreboard sb = getScoreboard();
+                if (sb != null && finalName != null && !finalName.isEmpty()) {
+                    safeRemoveFromAllOurTeams(sb, finalName);
+                }
+
+                // 2. Jeśli gracz jest fizycznie online – zdejmij z niego efekt potki
+                Player p = Bukkit.getPlayer(uuid);
+                if (p != null && p.isOnline() && p.isValid()) {
+                    try {
+                        p.removePotionEffect(PotionEffectType.GLOWING);
+                    } catch (Throwable ignored) {}
+                }
+            } catch (Throwable t) {
+                // Ignorujemy błędy pakietowe, aby nigdy nie wywalić gracza z serwera
+            }
+        });
     }
 
     /**
-     * Alias dla compat z starym API.
+     * Sprawdza, czy gracz aktualnie posiada aktywny glowing z pluginu.
      */
+    public boolean isGlowing(Player player) {
+        if (player == null) return false;
+        return glowingTasks.containsKey(player.getUniqueId()) || activeColors.containsKey(player.getUniqueId());
+    }
+
+    /**
+     * Wywoływane przy PlayerQuitEvent – natychmiast czyści ślady, by po ponownym wejściu nie było bugów z kolorem.
+     */
+    public void cleanupPlayer(Player player) {
+        if (player == null) return;
+        removeGlowingInternal(player.getUniqueId(), player.getName());
+    }
+
     public void cleanup(Player player) {
         cleanupPlayer(player);
+    }
+
+    /**
+     * Synchronizacja dla nowo wchodzącego gracza lub po respawnie/reappear klona Citizens.
+     */
+    public void syncToNewPlayer(Player player) {
+        if (player == null || !player.isOnline()) return;
+
+        runSync(() -> {
+            try {
+                Scoreboard sb = getScoreboard();
+                if (sb == null) return;
+
+                String name = player.getName();
+                // Jeśli gracz NIE powinien się świecić, upewnijmy się, że nie został w żadnym starym teamie cpl_
+                if (!isGlowing(player)) {
+                    safeRemoveFromAllOurTeams(sb, name);
+                }
+            } catch (Throwable ignored) {}
+        });
+    }
+
+    /**
+     * Czyści wszystkie teamy i efekty przy wyłączaniu pluginu (onDisable).
+     */
+    public void cleanupAll() {
+        for (BukkitTask task : glowingTasks.values()) {
+            if (task != null) {
+                try {
+                    task.cancel();
+                } catch (Throwable ignored) {}
+            }
+        }
+        glowingTasks.clear();
+        activeColors.clear();
+        playerNames.clear();
+
+        try {
+            Scoreboard sb = getScoreboard();
+            if (sb != null) {
+                safeUnregisterAllOurTeams(sb);
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    // ==========================================
+    // Metody pomocnicze - maksymalne bezpieczeństwo
+    // ==========================================
+
+    private Scoreboard getScoreboard() {
+        try {
+            var manager = Bukkit.getScoreboardManager();
+            return (manager != null) ? manager.getMainScoreboard() : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private String getTeamNameForColor(ChatColor color) {
+        String name = TEAM_PREFIX + color.name().toLowerCase();
+        if (name.length() > 16) {
+            name = name.substring(0, 16);
+        }
+        return name;
+    }
+
+    private void safeRemoveFromAllOurTeams(Scoreboard sb, String playerName) {
+        if (sb == null || playerName == null || playerName.isEmpty()) return;
+        try {
+            for (Team team : new HashSet<>(sb.getTeams())) {
+                if (team.getName().startsWith(TEAM_PREFIX)) {
+                    try {
+                        if (team.hasEntry(playerName)) {
+                            team.removeEntry(playerName);
+                        }
+                    } catch (Throwable ignored) {}
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    private void safeUnregisterAllOurTeams(Scoreboard sb) {
+        if (sb == null) return;
+        try {
+            for (Team team : new HashSet<>(sb.getTeams())) {
+                if (team.getName().startsWith(TEAM_PREFIX)) {
+                    try {
+                        team.unregister();
+                    } catch (Throwable ignored) {}
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    private void runSync(Runnable runnable) {
+        if (Bukkit.isPrimaryThread()) {
+            runnable.run();
+        } else if (plugin.isEnabled()) {
+            Bukkit.getScheduler().runTask(plugin, runnable);
+        }
     }
 }
