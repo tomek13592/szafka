@@ -1,0 +1,32 @@
+name: CostumePlugin
+version: 1.0.0
+main: pl.anacode.costume.CostumePlugin
+api-version: 1.21
+authors: [Anacode]
+description: Plugin kostiumów i petów z unikalnymi umiejętnościami
+depend: [ProtocolLib, Vault]
+softdepend: [WorldGuard, HeartPlugin, Nametags, PlaceholderAPI]
+
+commands:
+  kostium:
+    description: Główna komenda kostiumów
+    usage: /kostium
+    aliases: [costume]
+  szafka:
+    description: Otwiera szafkę kostiumów i petów
+    usage: /szafka
+    aliases: [kostiumy]
+  pet:
+    description: Zarządzanie petami i otwieranie szafki
+    usage: /pet
+  przedluzanie:
+    description: Ustawia item do przedłużania petów
+    usage: /przedluzanie
+  papuga:
+    description: Komendy dla papug
+    usage: /papuga
+
+permissions:
+  anacode.kostium.admin:
+    description: Pozwala na zarządzanie kostiumami i petami
+    default: op
